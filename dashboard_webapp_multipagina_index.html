@@ -1,0 +1,131 @@
+
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <title>Dashboard Web App Multipagina</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/gridstack@7.2.1/dist/gridstack.min.css" />
+  <script src="https://cdn.plot.ly/plotly-2.27.1.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/gridstack@7.2.1/dist/gridstack-all.min.js"></script>
+  <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; background: #f4f4f4; }
+    header { background: #007bff; color: white; padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; }
+    nav button { background: white; color: #007bff; border: none; margin-left: 10px; padding: 8px 12px; border-radius: 5px; cursor: pointer; }
+    nav button.active { background: #0056b3; color: white; }
+    .container { padding: 20px; }
+    .grid-stack-item-content { background: #fff; border: 1px solid #ccc; border-radius: 8px; padding: 10px; box-shadow: 2px 2px 6px rgba(0,0,0,0.1); }
+    .plot-container { width: 100%; height: 100%; }
+    .kpi-box { margin-bottom: 20px; padding: 15px; background: #007bff; color: white; border-radius: 8px; font-weight: bold; font-size: 18px; }
+    .controls { margin-bottom: 20px; }
+    .controls select, .controls input[type=range] { padding: 5px; margin-right: 10px; }
+    .controls button { padding: 6px 12px; border-radius: 5px; border: none; cursor: pointer; background: #28a745; color: white; }
+  </style>
+</head>
+<body>
+<header>
+  <h2>Dashboard Web App</h2>
+  <nav>
+    <button onclick="showPage('page1')" class="active">📊 Layout Interattivo</button>
+    <button onclick="showPage('page2')">📈 Filtri & KPI</button>
+  </nav>
+</header>
+<div class="container">
+  <div id="page1" class="page">
+    <div class="controls">
+      <button onclick="salvaLayout()">💾 Salva Layout</button>
+      <button onclick="caricaLayout()">📂 Carica Layout</button>
+    </div>
+    <div class="grid-stack"></div>
+  </div>
+  <div id="page2" class="page" style="display:none;">
+    <div class="controls">
+      <label>Prodotto:
+        <select id="prodottoSelect" onchange="aggiornaForecast()">
+          <option value="A">Prodotto A</option>
+          <option value="B">Prodotto B</option>
+          <option value="C">Prodotto C</option>
+        </select>
+      </label>
+      <label>Intervallo mesi:
+        <input type="range" id="meseRange" min="1" max="12" value="12" oninput="aggiornaForecast()" />
+      </label>
+      <button onclick="esportaDashboard()">📤 Esporta Pagina</button>
+    </div>
+    <div class="kpi-box" id="kpiTotaleVendite">Totale Vendite: €0</div>
+    <div id="graficoForecast" class="plot-container" style="height: 500px;"></div>
+  </div>
+</div>
+<script>
+  function showPage(id) {
+    document.querySelectorAll('.page').forEach(p => p.style.display = 'none');
+    document.getElementById(id).style.display = 'block';
+    document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+    document.querySelector(`nav button[onclick="showPage('${id}')"]`).classList.add('active');
+  }
+
+  const grid = GridStack.init({ cellHeight: 350, float: true, resizable: { handles: 'all' } });
+
+  const mesi = ['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
+  const vendite = {
+    A: [1200,1800,2400,3000,2600,2800,3100,2900,2700,2500,2300,2200],
+    B: [900,1500,1800,2100,2300,2500,2700,2600,2400,2200,2100,2000],
+    C: [600,1100,1400,1600,1900,2000,2200,2300,2100,1900,1800,1700]
+  };
+
+  const grafici = [
+    {id:'grafico1', titolo:'Totale vendite per prodotto', data:[{x:['A','B','C'], y:[33100,27200,22200], type:'bar'}], layout:{title:'Totale Vendite'}},
+    {id:'grafico2', titolo:'Vendite Mensili per A, B, C', data:[{x:mesi,y:vendite.A,name:'A',mode:'lines+markers'},{x:mesi,y:vendite.B,name:'B',mode:'lines+markers'},{x:mesi,y:vendite.C,name:'C',mode:'lines+markers'}], layout:{title:'Mensile'}},
+    {id:'grafico3', titolo:'Distribuzione %', data:[{labels:['A','B','C'],values:[33100,27200,22200],type:'pie'}], layout:{title:'Distribuzione'}},
+    {id:'grafico4', titolo:'Nord vs Sud A', data:[{x:mesi,y:vendite.A.map(v=>v*0.55),name:'Nord',mode:'lines+markers'},{x:mesi,y:vendite.A.map(v=>v*0.45),name:'Sud',mode:'lines+markers'}], layout:{title:'Nord vs Sud'}}
+  ];
+
+  grafici.forEach((g, i) => {
+    const el = document.createElement('div');
+    el.innerHTML = `<div class='grid-stack-item-content'><h4>${g.titolo}</h4><div id='${g.id}' class='plot-container'></div></div>`;
+    grid.addWidget(el, {x:i%2*4, y:Math.floor(i/2)*2, w:4, h:2, id:g.id});
+    Plotly.newPlot(g.id, g.data, g.layout, {responsive:true});
+  });
+
+  function salvaLayout() {
+    localStorage.setItem('layout', JSON.stringify(grid.save(true)));
+    alert('Layout salvato!');
+  }
+
+  function caricaLayout() {
+    const layout = JSON.parse(localStorage.getItem('layout') || '[]');
+    if (!layout.length) return alert('Nessun layout salvato.');
+    grid.removeAll();
+    layout.forEach(item => {
+      const g = grafici.find(x => x.id === item.id);
+      const el = document.createElement('div');
+      el.innerHTML = `<div class='grid-stack-item-content'><h4>${g.titolo}</h4><div id='${g.id}' class='plot-container'></div></div>`;
+      grid.addWidget(el, item);
+      Plotly.newPlot(g.id, g.data, g.layout, {responsive:true});
+    });
+  }
+
+  function esportaDashboard() {
+    html2canvas(document.querySelector('.page:not([style*="display: none"])')).then(canvas => {
+      const a = document.createElement('a');
+      a.href = canvas.toDataURL('image/png');
+      a.download = "dashboard_page.png";
+      a.click();
+    });
+  }
+
+  function aggiornaForecast() {
+    const prodotto = document.getElementById('prodottoSelect').value;
+    const maxMese = parseInt(document.getElementById('meseRange').value);
+    const data = vendite[prodotto].slice(0, maxMese);
+    const labels = mesi.slice(0, maxMese);
+    const totale = data.reduce((a,b)=>a+b, 0);
+    document.getElementById('kpiTotaleVendite').innerText = 'Totale Vendite: €' + totale.toLocaleString();
+    const forecast = data.concat([data.at(-1)*1.05, data.at(-1)*1.1, data.at(-1)*1.15]);
+    const forecastLabels = labels.concat(['+1M', '+2M', '+3M']);
+    Plotly.newPlot("graficoForecast", [{ x: forecastLabels, y: forecast, mode: 'lines+markers', name: 'Forecast', line: {shape:'spline'} }], {title: `Forecast Prodotto ${prodotto}`}, {responsive:true});
+  }
+  aggiornaForecast();
+</script>
+</body>
+</html>
